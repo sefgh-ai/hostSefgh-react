@@ -9,6 +9,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout React Repo
         uses: actions/checkout@v4
@@ -18,7 +19,6 @@ jobs:
       - name: Find package.json directory
         id: pkgdir
         run: |
-          # Find the first package.json that is not in node_modules
           PKG_DIR=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
           echo "Found package.json in: $PKG_DIR"
           echo "pkgdir=$PKG_DIR" >> $GITHUB_OUTPUT
@@ -42,6 +42,20 @@ jobs:
           cd "${{ steps.pkgdir.outputs.pkgdir }}"
           npm run build
 
+      - name: Find build output directory
+        id: builddir
+        run: |
+          cd "${{ steps.pkgdir.outputs.pkgdir }}"
+          # Prefer dist, fallback to build
+          if [ -d dist ]; then
+            echo "builddir=${{ steps.pkgdir.outputs.pkgdir }}/dist" >> $GITHUB_OUTPUT
+          elif [ -d build ]; then
+            echo "builddir=${{ steps.pkgdir.outputs.pkgdir }}/build" >> $GITHUB_OUTPUT
+          else
+            echo "No build output directory found!"
+            exit 1
+          fi
+
       - name: Clone Main Repo
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -53,12 +67,9 @@ jobs:
 
       - name: Copy build output to main repo root and rename index.html
         run: |
-          # Find dist directory (assume standard React output)
-          DIST_DIR="${{ steps.pkgdir.outputs.pkgdir }}/dist"
           cd ../main-repo
-
-          # Copy only the contents of dist into the root
-          cp -rf "$DIST_DIR"/* .
+          # Copy only the contents of the build output into the root
+          cp -rf "${{ steps.builddir.outputs.builddir }}"/* .
 
           # Rename index.html to searchpage.html
           if [ -f ./index.html ]; then
