@@ -1,0 +1,59 @@
+name: Publish dist to Main Repo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout React Repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build React App
+        run: npm run build
+
+      - name: Clone Main Repo
+        run: |
+          git clone https://github.com/sefgh-ai/hostSefgh.git ../main-repo
+          cd ../main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare files for main repo
+        run: |
+          cd ../main-repo
+          rm -rf dist
+          mkdir dist
+          cp -r ../hostSefgh-react/dist/* ./dist/
+
+          # Rename index.html to searchpage.html
+          if [ -f ./dist/index.html ]; then
+            mv ./dist/index.html ./dist/searchpage.html
+          fi
+
+      - name: Commit and Push to Main Repo
+        run: |
+          cd ../main-repo
+          git add dist
+          git commit -m "Sync dist from React submodule (auto, ${{ github.sha }})" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
