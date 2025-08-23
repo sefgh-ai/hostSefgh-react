@@ -16,13 +16,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Find package.json directory
-        id: pkgdir
-        run: |
-          PKG_DIR=$(find . -type f -name package.json -not -path "*/node_modules/*" | head -n 1 | xargs dirname)
-          echo "Found package.json in: $PKG_DIR"
-          echo "pkgdir=$PKG_DIR" >> $GITHUB_OUTPUT
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -30,7 +23,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd "${{ steps.pkgdir.outputs.pkgdir }}"
           if [ -f package-lock.json ]; then
             npm ci
           else
@@ -38,21 +30,22 @@ jobs:
           fi
 
       - name: Build React App
+        run: npm run build
+
+      - name: List files after build (diagnostic)
         run: |
-          cd "${{ steps.pkgdir.outputs.pkgdir }}"
-          npm run build
+          echo "Files in root after build:"
+          find . -maxdepth 2
 
       - name: Find build output directory
         id: builddir
         run: |
-          cd "${{ steps.pkgdir.outputs.pkgdir }}"
-          # Prefer dist, fallback to build
           if [ -d dist ]; then
-            echo "builddir=${{ steps.pkgdir.outputs.pkgdir }}/dist" >> $GITHUB_OUTPUT
+            echo "builddir=dist" >> $GITHUB_OUTPUT
           elif [ -d build ]; then
-            echo "builddir=${{ steps.pkgdir.outputs.pkgdir }}/build" >> $GITHUB_OUTPUT
+            echo "builddir=build" >> $GITHUB_OUTPUT
           else
-            echo "No build output directory found!"
+            echo "ERROR: No 'dist' or 'build' directory found after build." >&2
             exit 1
           fi
 
@@ -68,8 +61,9 @@ jobs:
       - name: Copy build output to main repo root and rename index.html
         run: |
           cd ../main-repo
+
           # Copy only the contents of the build output into the root
-          cp -rf "${{ steps.builddir.outputs.builddir }}"/* .
+          cp -rf ../hostSefgh-react/${{ steps.builddir.outputs.builddir }}/* .
 
           # Rename index.html to searchpage.html
           if [ -f ./index.html ]; then
