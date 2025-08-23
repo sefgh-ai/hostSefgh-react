@@ -1,4 +1,4 @@
-name: Publish dist to Main Repo
+name: Publish React Build to Main Repo Root
 
 on:
   push:
@@ -14,7 +14,6 @@ jobs:
       - name: Checkout React Repo
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -23,37 +22,45 @@ jobs:
           node-version: 18
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build React App
         run: npm run build
 
       - name: Clone Main Repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           git clone https://github.com/sefgh-ai/hostSefgh.git ../main-repo
           cd ../main-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare files for main repo
+      - name: Copy build output to main repo root and rename index.html
         run: |
+          # Remove old build artifacts from main repo root (but keep .git/, .github/, and workflow files)
           cd ../main-repo
-          rm -rf dist
-          mkdir dist
-          cp -r ../hostSefgh-react/dist/* ./dist/
+          find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name '.' ! -name '..' -type f -exec rm -f {} +
+          find . -maxdepth 1 ! -name '.git' ! -name '.github' ! -name '.' ! -name '..' -type d -exec rm -rf {} +
 
-          # Rename index.html to searchpage.html
-          if [ -f ./dist/index.html ]; then
-            mv ./dist/index.html ./dist/searchpage.html
+          # Copy all files from the built dist folder into main repo root
+          cp -r ../hostSefgh-react/dist/* .
+
+          # Rename index.html to searchpage.html if exists
+          if [ -f ./index.html ]; then
+            mv ./index.html ./searchpage.html
           fi
 
       - name: Commit and Push to Main Repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           cd ../main-repo
-          git add dist
-          git commit -m "Sync dist from React submodule (auto, ${{ github.sha }})" || echo "No changes to commit"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git add .
+          git commit -m "Publish React build to root (auto, ${{ github.sha }})" || echo "No changes to commit"
+          git push https://x-access-token:${GH_TOKEN}@github.com/sefgh-ai/hostSefgh.git main
