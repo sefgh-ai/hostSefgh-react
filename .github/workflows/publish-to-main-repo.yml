@@ -1,0 +1,66 @@
+name: Publish React Build to Main Repo Root
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout React Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build React App
+        run: npm run build
+
+      - name: Clone Main Repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          git clone https://github.com/sefgh-ai/hostSefgh.git ../main-repo
+          cd ../main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Copy build output to main repo root and rename index.html
+        run: |
+          cd ../main-repo
+
+          # OPTIONAL: Remove previous build artifacts (customize as needed)
+          # rm -rf *.js *.css *.png *.svg *.ico *.txt *.json *.html static/ assets/ dist/  # <-- Uncomment and edit if you want to clean up previous build
+
+          # Copy contents of dist (not the folder itself) into the root
+          cp -rf ../hostSefgh-react/dist/* .
+
+          # Rename index.html to searchpage.html
+          if [ -f ./index.html ]; then
+            mv ./index.html ./searchpage.html
+          fi
+
+      - name: Commit and Push to Main Repo
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cd ../main-repo
+          git add .
+          git commit -m "Publish React build to root (auto, ${{ github.sha }})" || echo "No changes to commit"
+          git push https://x-access-token:${GH_TOKEN}@github.com/sefgh-ai/hostSefgh.git main
