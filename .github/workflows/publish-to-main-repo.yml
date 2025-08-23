@@ -76,7 +76,7 @@ jobs:
       - name: List files after build (diagnostic)
         run: |
           echo "Files after build:"
-          find react -maxdepth 2
+          find react -maxdepth 3
 
       - name: Identify build output directory (cd react)
         id: find-output
@@ -108,12 +108,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Copy build output to main repo root and rename index.html
+      - name: Copy build output to main repo root, rename only the built index.html
         run: |
+          set -e
           cd ../main-repo
-          cp -rf ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/* .
-          if [ -f ./index.html ]; then
-            mv ./index.html ./searchpage.html
+          # Copy everything except index.html from build output
+          rsync -av --exclude='index.html' ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/ ./
+          # If the built index.html exists, copy and rename it
+          if [ -f ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/index.html ]; then
+            cp ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/index.html ./searchpage.html
           fi
 
       - name: Commit and Push to Main Repo
