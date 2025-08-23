@@ -1,4 +1,4 @@
-name: Publish React Build to Main Repo Root
+name: Publish React Build Output to Main Repo Root
 
 on:
   push:
@@ -9,9 +9,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout React Repo
+      - name: Checkout Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -61,11 +60,7 @@ jobs:
       - name: Copy build output to main repo root and rename index.html
         run: |
           cd ../main-repo
-
-          # Copy only the contents of the build output into the root
           cp -rf ../hostSefgh-react/${{ steps.builddir.outputs.builddir }}/* .
-
-          # Rename index.html to searchpage.html
           if [ -f ./index.html ]; then
             mv ./index.html ./searchpage.html
           fi
