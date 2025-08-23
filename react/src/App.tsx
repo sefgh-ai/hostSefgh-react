@@ -12,7 +12,7 @@ import SharedChat from "./pages/SharedChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
-
+//ADDEED TEST
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <UserProvider>
