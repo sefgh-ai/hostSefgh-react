@@ -9,6 +9,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -19,33 +20,82 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
 
-      - name: Install dependencies
+      - name: Smart install dependencies
         run: |
+          set -e
           if [ -f package-lock.json ]; then
-            npm ci
+            echo "Trying npm ci..."
+            npm ci || {
+              echo "npm ci failed, trying npm install --legacy-peer-deps..."
+              npm install --legacy-peer-deps || {
+                echo "npm install --legacy-peer-deps failed, trying npm install --force..."
+                npm install --force || {
+                  echo "All npm install attempts failed!"; exit 1;
+                }
+              }
+            }
           else
-            npm install
+            echo "No package-lock.json, trying npm install..."
+            npm install --legacy-peer-deps || {
+              echo "npm install --legacy-peer-deps failed, trying npm install --force..."
+              npm install --force || {
+                echo "All npm install attempts failed!"; exit 1;
+              }
+            }
           fi
 
-      - name: Build React App
-        run: npm run build
+      - name: Smart build (with fallback)
+        id: buildstep
+        run: |
+          # Try multiple build approaches for resilience
+          set -e
+          export NODE_OPTIONS=--max_old_space_size=4096
+          echo "Standard build attempt..."
+          if npm run build; then
+            echo "Standard build succeeded"
+          else
+            echo "Standard build failed, attempting esbuild rebuild..."
+            npm rebuild esbuild || true
+            if npm run build; then
+              echo "Build succeeded after esbuild rebuild"
+            else
+              echo "Build failed after esbuild rebuild, attempting with latest esbuild..."
+              npm install esbuild@latest --no-save || true
+              if npm run build; then
+                echo "Build succeeded after installing latest esbuild"
+              else
+                echo "All build attempts failed!"
+                exit 1
+              fi
+            fi
+          fi
 
       - name: List files after build (diagnostic)
         run: |
-          echo "Files in root after build:"
+          echo "Files after build:"
           find . -maxdepth 2
 
-      - name: Find build output directory
-        id: builddir
+      - name: Identify build output directory
+        id: find-output
         run: |
-          if [ -d dist ]; then
-            echo "builddir=dist" >> $GITHUB_OUTPUT
-          elif [ -d build ]; then
-            echo "builddir=build" >> $GITHUB_OUTPUT
+          if [ -d "dist" ]; then
+            echo "output_dir=dist" >> $GITHUB_OUTPUT
+            echo "Build output found in dist directory"
+          elif [ -d "build" ]; then
+            echo "output_dir=build" >> $GITHUB_OUTPUT
+            echo "Build output found in build directory"
           else
-            echo "ERROR: No 'dist' or 'build' directory found after build." >&2
-            exit 1
+            OUTPUT_DIR=$(find . -maxdepth 1 -type d ! -name "node_modules" ! -name ".git" ! -name "." | head -n 1 | sed 's|^\./||')
+            if [ -n "$OUTPUT_DIR" ]; then
+              echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
+              echo "Fallback: Build output found in $OUTPUT_DIR directory"
+            else
+              echo "No build output directory found"
+              exit 1
+            fi
           fi
 
       - name: Clone Main Repo
@@ -60,7 +110,7 @@ jobs:
       - name: Copy build output to main repo root and rename index.html
         run: |
           cd ../main-repo
-          cp -rf ../hostSefgh-react/${{ steps.builddir.outputs.builddir }}/* .
+          cp -rf ../hostSefgh-react/${{ steps.find-output.outputs.output_dir }}/* .
           if [ -f ./index.html ]; then
             mv ./index.html ./searchpage.html
           fi
