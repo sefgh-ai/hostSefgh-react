@@ -76,7 +76,7 @@ jobs:
       - name: List files after build (diagnostic)
         run: |
           echo "Files after build:"
-          find react -maxdepth 3
+          find react -maxdepth 2
 
       - name: Identify build output directory (cd react)
         id: find-output
@@ -99,6 +99,12 @@ jobs:
             fi
           fi
 
+      # FORCE A GIT CHANGE: add a unique file to the build output
+      - name: Add dummy file to build output to force git changes
+        run: |
+          cd react/${{ steps.find-output.outputs.output_dir }}
+          echo "Build timestamp: $(date --utc +'%Y-%m-%dT%H:%M:%SZ')" > .force-redeploy-$(date +%s)
+
       - name: Clone Main Repo
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -108,22 +114,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Copy build output to main repo root, rename only the built index.html
+      - name: Copy build output to main repo root and rename index.html
         run: |
-          set -e
           cd ../main-repo
-          # Copy everything except index.html from build output
-          rsync -av --exclude='index.html' ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/ ./
-          # If the built index.html exists, copy and rename it
-          if [ -f ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/index.html ]; then
-            cp ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/index.html ./searchpage.html
+          cp -rf ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/* .
+          if [ -f ./index.html ]; then
+            mv ./index.html ./searchpage.html
           fi
 
-      - name: Commit and Push to Main Repo
+      - name: Commit and Push to Main Repo (force new commit every run)
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           cd ../main-repo
           git add .
-          git commit -m "Publish React build to root (auto, ${{ github.sha }})" || echo "No changes to commit"
+          git commit -m "Publish React build to root (auto, ${{ github.sha }}, $(date --utc +'%Y-%m-%dT%H:%M:%SZ'))" --allow-empty
           git push https://x-access-token:${GH_TOKEN}@github.com/sefgh-ai/hostSefgh.git main
