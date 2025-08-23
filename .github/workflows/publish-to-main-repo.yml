@@ -21,11 +21,11 @@ jobs:
         with:
           node-version: 18
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache-dependency-path: 'react/package-lock.json'
 
-      - name: Smart install dependencies
+      - name: Smart install dependencies (cd react)
         run: |
-          set -e
+          cd react
           if [ -f package-lock.json ]; then
             echo "Trying npm ci..."
             npm ci || {
@@ -47,10 +47,10 @@ jobs:
             }
           fi
 
-      - name: Smart build (with fallback)
+      - name: Smart build (with fallback, cd react)
         id: buildstep
         run: |
-          # Try multiple build approaches for resilience
+          cd react
           set -e
           export NODE_OPTIONS=--max_old_space_size=4096
           echo "Standard build attempt..."
@@ -76,11 +76,12 @@ jobs:
       - name: List files after build (diagnostic)
         run: |
           echo "Files after build:"
-          find . -maxdepth 2
+          find react -maxdepth 2
 
-      - name: Identify build output directory
+      - name: Identify build output directory (cd react)
         id: find-output
         run: |
+          cd react
           if [ -d "dist" ]; then
             echo "output_dir=dist" >> $GITHUB_OUTPUT
             echo "Build output found in dist directory"
@@ -88,7 +89,7 @@ jobs:
             echo "output_dir=build" >> $GITHUB_OUTPUT
             echo "Build output found in build directory"
           else
-            OUTPUT_DIR=$(find . -maxdepth 1 -type d ! -name "node_modules" ! -name ".git" ! -name "." | head -n 1 | sed 's|^\./||')
+            OUTPUT_DIR=$(find . -maxdepth 1 -type d ! -name "node_modules" ! -name "." | grep -v "^\.$" | head -n 1 | sed 's|^\./||')
             if [ -n "$OUTPUT_DIR" ]; then
               echo "output_dir=$OUTPUT_DIR" >> $GITHUB_OUTPUT
               echo "Fallback: Build output found in $OUTPUT_DIR directory"
@@ -110,7 +111,7 @@ jobs:
       - name: Copy build output to main repo root and rename index.html
         run: |
           cd ../main-repo
-          cp -rf ../hostSefgh-react/${{ steps.find-output.outputs.output_dir }}/* .
+          cp -rf ../hostSefgh-react/react/${{ steps.find-output.outputs.output_dir }}/* .
           if [ -f ./index.html ]; then
             mv ./index.html ./searchpage.html
           fi
